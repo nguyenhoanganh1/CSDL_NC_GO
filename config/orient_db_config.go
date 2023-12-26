@@ -1,25 +1,65 @@
 package config
 
-import orient "github.com/quux00/ogonori"
+import (
+	"gopkg.in/istreamdata/orientgo.v2"
+	_ "gopkg.in/istreamdata/orientgo.v2/obinary"
+	_ "net/http"
+	_ "net/http/pprof"
+)
+
+var (
+	address                          = "localhost:2424"
+	databaseName                     = "demo"
+	documentType orient.DatabaseType = "document"
+	username                         = "root"
+	password                         = "admin"
+)
 
 type OrientDBService interface {
 	GetConnect() orient.DBSession
 }
 
 type OrientDBConfig struct {
-	host         string              `default:"localhost"`
-	port         string              `default:"2424"`
-	databaseName string              `default:"demo"`
-	documentType orient.DatabaseType `default:"document"`
-	username     string              `default:"root"`
-	password     string              `default:"root"`
 }
 
-func (o *OrientDBConfig) GetConnect() orient.DBSession {
-	var db orient.DBConnection
-	open, err := db.Open(o.databaseName, o.documentType, o.username, o.password)
+func (o *OrientDBConfig) GetConnect() *orient.Database {
+	client, err := orient.Dial(address)
+
 	if err != nil {
-		return nil
+		panic(err)
 	}
-	return open
+
+	admin, err := client.Auth(username, password)
+	if err != nil {
+		panic(err)
+	}
+
+	ok, err := admin.DatabaseExists(databaseName, orient.Persistent)
+	if err != nil {
+		panic(err)
+	}
+
+	if !ok {
+		// There are 2 options
+		// 1. orient.GraphDB - graph database
+		// 2. orient.DocumentDB - document database
+		err = admin.CreateDatabase(databaseName, orient.GraphDB, orient.Persistent)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	database, err := client.Open(databaseName, documentType, username, password)
+	if err != nil {
+		panic(err)
+	}
+
+	defer func(database *orient.Database) {
+		err := database.Close()
+		if err != nil {
+
+		}
+	}(database)
+
+	return database
 }
